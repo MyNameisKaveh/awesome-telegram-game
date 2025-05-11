@@ -5,26 +5,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>بازی دوز حرفه‌ای</title>
     <link rel="stylesheet" href="style.css">
-    <!-- اسکریپت ضروری برای ارتباط با API وب‌اپ تلگرام -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <div id="game-container">
-        <header>
-            <h1>بازی دوز</h1>
-        </header>
-        
-        <div id="status-area" role="status" aria-live="polite">نوبت بازیکن X</div>
+    <div id="app-container"> <!-- یک محفظه کلی برای همه چیز -->
 
-        <div id="board">
-            <!-- خانه‌های بازی با جاوااسکریپت ایجاد خواهند شد -->
+        <!-- بخش انتخاب حالت بازی -->
+        <div id="game-mode-selection">
+            <header>
+                <h1>بازی دوز آنلاین</h1>
+            </header>
+            <p>یک حالت بازی را انتخاب کنید:</p>
+            <div class="mode-buttons">
+                <button id="play-ai-button" class="mode-button">👤 بازی با کامپیوتر</button>
+                <button id="create-online-game-button" class="mode-button">➕ ایجاد بازی آنلاین</button>
+            </div>
+            <div class="join-game-section">
+                <input type="text" id="join-game-id-input" placeholder="کد بازی برای پیوستن">
+                <button id="join-online-game-button" class="mode-button compact">پیوستن</button>
+            </div>
+            <button id="show-leaderboard-from-menu-button" class="mode-button secondary">🏆 مشاهده لیدربورد</button>
         </div>
 
-        <div id="controls">
-            <button id="restart-button">شروع مجدد</button>
-            <button id="leaderboard-button">🏆 لیدربورد</button> 
+        <!-- بخش اصلی بازی (در ابتدا مخفی) -->
+        <div id="game-board-section" class="hidden">
+            <header>
+                <h1 id="game-title">بازی دوز</h1> <!-- عنوان بازی می‌تواند داینامیک باشد -->
+            </header>
+            
+            <div id="status-area" role="status" aria-live="polite">نوبت بازیکن X</div>
+            <div id="game-info-area"></div> <!-- برای نمایش اطلاعات بازی آنلاین مثل کد بازی -->
+
+            <div id="board">
+                <!-- خانه‌های بازی با جاوااسکریپت ایجاد خواهند شد -->
+            </div>
+
+            <div id="controls">
+                <button id="restart-button">شروع مجدد / خروج</button> <!-- دکمه ریستارت می‌تواند برای خروج هم استفاده شود -->
+                <!-- دکمه لیدربورد می‌تواند اینجا هم باشد یا فقط در منوی اصلی -->
+                <!-- <button id="leaderboard-button">🏆 لیدربورد</button> -->
+            </div>
         </div>
 
+        <!-- بخش لیدربورد (در ابتدا مخفی) -->
         <div id="leaderboard-section" class="hidden">
             <h2>برترین بازیکنان</h2>
             <div id="leaderboard-list">
