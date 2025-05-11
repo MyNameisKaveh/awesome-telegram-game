@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/telegram.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/score.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/telegram",
+      "dest": "/api/telegram.py"
+    },
+    {
+      "src": "/api/score_test",
+      "dest": "/api/score.py" 
+    },
+    {
+      "src": "/api/submit_score", 
+      "dest": "/api/score.py"
+    },
+    {
+      "src": "/api/score",      // اگر این مسیر هم در score.py تعریف شده بود
+      "dest": "/api/score.py"
+    }
+  ]
+}
