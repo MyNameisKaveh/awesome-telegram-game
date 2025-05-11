@@ -4,18 +4,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const restartButton = document.getElementById('restart-button');
     const gameContainer = document.getElementById('game-container');
     
-    // دسترسی به API تلگرام وب‌اپ
-    const tg = window.Telegram.WebApp;
+    // دسترسی به API تلگرام وب‌اپ (اگر در محیط تلگرام باشد)
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 
     // تنظیمات اولیه بازی
     const PLAYER_X = 'X';
     const PLAYER_O = 'O';
     let currentPlayer = PLAYER_X;
-    let boardState = Array(9).fill(null); // null: خالی, 'X', 'O'
+    let boardState = Array(9).fill(null); 
     let gameActive = true;
-    let cells = []; // آرایه‌ای برای نگهداری عناصر DOM خانه‌ها
+    let cells = []; 
 
-    // ترکیب‌های برنده شدن
     const winningCombinations = [
         [0, 1, 2], [3, 4, 5], [6, 7, 8], // ردیف‌ها
         [0, 3, 6], [1, 4, 7], [2, 5, 8], // ستون‌ها
@@ -24,10 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- شروع توابع بازی ----------
 
-    // تابع برای ساختن خانه‌های بازی
     function createBoard() {
-        boardElement.innerHTML = ''; // پاک کردن صفحه قبلی اگر وجود دارد
-        cells = []; // خالی کردن آرایه خانه‌ها
+        boardElement.innerHTML = ''; 
+        cells = []; 
         for (let i = 0; i < 9; i++) {
             const cell = document.createElement('div');
             cell.classList.add('cell');
@@ -38,94 +36,133 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // تابع برای مدیریت کلیک روی یک خانه
     function handleCellClick(event) {
         if (!gameActive) return;
 
         const clickedCell = event.target;
         const cellIndex = parseInt(clickedCell.dataset.index);
 
-        if (boardState[cellIndex] !== null) { // اگر خانه پر بود
+        if (boardState[cellIndex] !== null) {
             return;
         }
 
-        // اعمال حرکت
         boardState[cellIndex] = currentPlayer;
         clickedCell.textContent = currentPlayer;
-        clickedCell.classList.add(currentPlayer.toLowerCase()); // برای استایل x یا o
+        clickedCell.classList.add(currentPlayer.toLowerCase()); 
         clickedCell.classList.add('occupied');
 
-        // بررسی نتیجه
         if (checkWin()) {
-            endGame(false); // false یعنی مساوی نشده، کسی برده
-        } else if (boardState.every(cell => cell !== null)) { // همه خانه‌ها پر شده
-            endGame(true); // true یعنی مساوی شده
+            endGame(false); 
+        } else if (boardState.every(cell => cell !== null)) {
+            endGame(true); 
         } else {
             switchPlayer();
         }
     }
 
-    // تابع برای تغییر نوبت بازیکن
     function switchPlayer() {
         currentPlayer = currentPlayer === PLAYER_X ? PLAYER_O : PLAYER_X;
         statusArea.textContent = `نوبت بازیکن ${currentPlayer}`;
     }
 
-    // تابع برای بررسی برنده شدن
     function checkWin() {
         for (const combination of winningCombinations) {
             const [a, b, c] = combination;
             if (boardState[a] && boardState[a] === boardState[b] && boardState[a] === boardState[c]) {
-                // هایلایت کردن خانه‌های برنده
                 combination.forEach(index => cells[index].classList.add('winning-cell'));
-                return true; // یک نفر برنده شده
+                return true; 
             }
         }
-        return false; // هیچکس هنوز نبرده
+        return false; 
     }
 
-    // تابع برای پایان بازی
+    async function submitScoreToAPI(score, gameType, telegramInitData) {
+        const fullApiUrl = 'https://awesome-telegram-game.vercel.app/api/submit_score'; // URL کامل API شما
+
+        console.log("Attempting to submit score:", { score, gameType, telegramInitData: telegramInitData ? 'Available' : 'Not Available' });
+
+        if (!telegramInitData) {
+            console.error("Telegram initData is not available. Score submission aborted.");
+            statusArea.textContent += " (امتیاز ثبت نشد - نیاز به اجرای بازی از داخل تلگرام)";
+            return; // اگر initData نباشد، امتیازی ارسال نمی‌شود
+        }
+
+        try {
+            const response = await fetch(fullApiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    score: score,
+                    game_type: gameType,
+                    telegramInitData: telegramInitData 
+                }),
+            });
+
+            const result = await response.json(); // همیشه سعی کن پاسخ را به عنوان JSON بخوانی
+
+            if (response.ok) { // status code 200-299
+                console.log("Score submitted successfully:", result);
+                statusArea.textContent += ` (امتیاز شما: ${score} ثبت شد! وضعیت: ${result.message || 'موفق'})`;
+            } else { // status code 4xx or 5xx
+                console.error("Error submitting score - API responded with an error:", result);
+                statusArea.textContent += ` (خطا در ثبت امتیاز: ${result.detail || response.statusText || 'خطای سرور'})`;
+            }
+        } catch (error) { // خطای شبکه یا خطای دیگر در fetch
+            console.error("Network or other error during score submission:", error);
+            statusArea.textContent += " (خطا در شبکه هنگام ثبت امتیاز یا پاسخ نامعتبر از سرور)";
+        }
+    }
+
     function endGame(isDraw) {
         gameActive = false;
-        gameContainer.classList.add('game-over'); // اضافه کردن کلاس برای استایل‌های خاص پایان بازی
+        gameContainer.classList.add('game-over');
+
+        let gameScore = 0; 
+        let statusMessage = '';
 
         if (isDraw) {
-            statusArea.textContent = 'بازی مساوی شد! 😐';
+            statusMessage = 'بازی مساوی شد! 😐';
+            gameScore = 1; 
         } else {
-            statusArea.textContent = `بازیکن ${currentPlayer} برنده شد! 🎉`;
+            statusMessage = `بازیکن ${currentPlayer} برنده شد! 🎉`;
+            if (currentPlayer === PLAYER_X) { 
+                gameScore = 10; 
+            } else { 
+                gameScore = 0; 
+            }
         }
         
-        // (اختیاری) ارسال داده به بات در آینده
-        // if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-        //     const resultData = {
-        //         winner: isDraw ? null : currentPlayer,
-        //         isDraw: isDraw,
-        //         userId: tg.initDataUnsafe.user.id
-        //     };
-        //     tg.sendData(JSON.stringify(resultData));
-        // }
+        statusArea.textContent = statusMessage; // اول پیام نتیجه بازی نمایش داده شود
+
+        // تلاش برای ارسال امتیاز به API
+        if (tg && tg.initData) { // چک می‌کنیم که tg و initData معتبر باشند
+            const initDataString = tg.initData;
+            console.log("initData found, proceeding to submit score.");
+            submitScoreToAPI(gameScore, "tictactoe_default_v1", initDataString);
+        } else {
+            console.warn("Telegram WebApp initData not available or tg object is null. Score will not be submitted.");
+            statusArea.textContent += " (بازی در محیط تست، امتیاز ثبت نمی‌شود)";
+        }
     }
 
-    // تابع برای شروع مجدد بازی
     function restartGame() {
         currentPlayer = PLAYER_X;
         boardState = Array(9).fill(null);
         gameActive = true;
         gameContainer.classList.remove('game-over');
-        statusArea.textContent = `نوبت بازیکن ${currentPlayer}`;
         
         cells.forEach(cell => {
             cell.textContent = '';
             cell.classList.remove('x', 'o', 'occupied', 'winning-cell');
         });
-
-        // (اختیاری) اگر از تلگرام باز شده، شاید بخواهید رنگ‌های تم رو مجدد اعمال کنید
-        // applyTelegramTheme();
+        // پیام اولیه بعد از ریستارت باید توسط createBoard یا اینجا تنظیم شود
+        statusArea.textContent = `نوبت بازیکن ${currentPlayer}`; 
     }
     
-    // تابع برای اعمال رنگ‌های تم تلگرام (اگر نیاز باشد)
     function applyTelegramTheme() {
-        if (tg.themeParams) {
+        if (tg && tg.themeParams) {
             document.documentElement.style.setProperty('--telegram-bg-color', tg.themeParams.bg_color || '#ffffff');
             document.documentElement.style.setProperty('--telegram-text-color', tg.themeParams.text_color || '#000000');
             document.documentElement.style.setProperty('--telegram-hint-color', tg.themeParams.hint_color || '#999999');
@@ -138,26 +175,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- شروع اجرای اولیه بازی ----------
     
-    // وقتی وب‌اپ تلگرام آماده است
-    tg.ready(); // به تلگرام اطلاع می‌دهد که وب‌اپ آماده است
+    if (tg) { // اگر در محیط تلگرام هستیم
+        tg.ready(); // به تلگرام اطلاع می‌دهد که وب‌اپ آماده است
+        applyTelegramTheme(); // اعمال تم اولیه
+        tg.onEvent('themeChanged', applyTelegramTheme); // گوش دادن به تغییرات تم
+        // tg.expand(); // اگر می‌خواهید وب‌اپ تمام صفحه شود
+        console.log("Telegram WebApp API initialized.");
+        console.log("initData (raw):", tg.initData); // لاگ کردن initData برای دیباگ
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            console.log("User data from initDataUnsafe:", tg.initDataUnsafe.user);
+        }
+    } else {
+        console.warn("Telegram WebApp API not available. Running in standalone browser mode.");
+    }
     
-    // (اختیاری) هماهنگی با دکمه اصلی تلگرام (MainButton)
-    // tg.MainButton.setText("بستن بازی");
-    // tg.MainButton.onClick(() => tg.close());
-    // tg.MainButton.show();
-
-    // (اختیاری) درخواست تغییر اندازه پنجره وب‌اپ
-    // tg.expand();
-
-    // اعمال تم تلگرام در ابتدا
-    applyTelegramTheme();
-    // و همچنین هر بار که تم تغییر می‌کند (اگر از طریق ایونت پشتیبانی شود)
-    tg.onEvent('themeChanged', applyTelegramTheme);
-
-
-    // ساختن صفحه بازی اولیه
+    // ساختن صفحه بازی اولیه و تنظیم پیام اولیه
     createBoard();
-    statusArea.textContent = `نوبت بازیکن ${currentPlayer}`; // تنظیم پیام اولیه
+    statusArea.textContent = `نوبت بازیکن ${currentPlayer}`;
 
     // اضافه کردن Event Listener به دکمه شروع مجدد
     restartButton.addEventListener('click', restartGame);
