@@ -24,7 +24,7 @@
       "dest": "/api/score.py"
     },
     {
-      "src": "/api/score",      // اگر این مسیر هم در score.py تعریف شده بود
+      "src": "/api/score",
       "dest": "/api/score.py"
     }
   ]
