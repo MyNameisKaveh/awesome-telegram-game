@@ -11,9 +11,13 @@ from typing import Optional, List
 
 app = FastAPI()
 
+# ---------- شروع پیکربندی CORS ----------
 origins = [
     "https://mynameiskaveh.github.io", 
+    # "http://localhost:3000", 
+    # "http://127.0.0.1:3000", 
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -21,6 +25,7 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"],
 )
+# ---------- پایان پیکربندی CORS ----------
 
 class ScoreData(BaseModel):
     score: int
@@ -36,6 +41,7 @@ class LeaderboardResponse(BaseModel):
     leaderboard: List[LeaderboardEntry]
     game_type: str
     message: Optional[str] = None
+
 
 KV_REST_API_URL = os.environ.get("KV_REST_API_URL")
 KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN")
@@ -95,7 +101,7 @@ async def submit_score(score_input: ScoreData, request: Request):
     if not user_data or 'id' not in user_data:
         print("Score submission rejected: Invalid or missing user data from initData.")
         raise HTTPException(status_code=403, detail="Invalid user authentication (initData).")
-    user_id = str(user_data['id'])
+    user_id = str(user_data['id']) # zadd member باید رشته باشه
     username = user_data.get('username', f"user_{user_id}")
     first_name = user_data.get('first_name', "Player")
     print(f"Score submitted by User ID: {user_id}, Username: {username}, First Name: {first_name}")
@@ -119,7 +125,7 @@ async def submit_score(score_input: ScoreData, request: Request):
             "leaderboard_key": leaderboard_key
         }
     except Exception as e:
-        print(f"Error interacting with Async Redis (Upstash): {e}")
+        print(f"Error interacting with Async Redis (Upstash) in submit_score: {e}")
         raise HTTPException(status_code=500, detail=f"Error saving score: {e}")
 
 @app.get("/api/score_test")
@@ -143,33 +149,49 @@ async def get_leaderboard(
     leaderboard_key = f"leaderboard:{game_type}"
     leaderboard_data: List[LeaderboardEntry] = []
     try:
+        # upstash-redis با withscores=True لیستی از تاپل‌های (عضو به صورت رشته، امتیاز به صورت فلوت) برمی‌گرداند
         top_players_with_scores = await redis_client.zrevrange(
             leaderboard_key, 
             0, 
             limit - 1, 
-            withscores=True
+            withscores=True 
         )
         if not top_players_with_scores:
             print(f"No data found for leaderboard: {leaderboard_key}")
             return LeaderboardResponse(leaderboard=[], game_type=game_type, message="لیدربورد خالی است.")
+        
         print(f"Fetched top players (as list of tuples) from Redis: {top_players_with_scores}")
         
-        # upstash-redis با withscores=True لیستی از تاپل‌های (بایت عضو، فلوت امتیاز) برمی‌گرداند
-        for user_id_bytes, score_float in top_players_with_scores:
-            user_id_str = user_id_bytes.decode('utf-8')
+        for member, score_float in top_players_with_scores:
+            # عضو (member) از قبل باید رشته باشه، score_float هم فلوت
+            user_id_str = str(member) # برای اطمینان بیشتر، به رشته تبدیل می‌کنیم
+            
             user_info_key = f"user_info:{user_id_str}"
-            user_info_json_bytes = await redis_client.get(user_info_key)
+            user_info_json_data = await redis_client.get(user_info_key)
+            
             player_name = f"User {user_id_str}"
-            if user_info_json_bytes:
+            if user_info_json_data:
                 try:
-                    user_info = json.loads(user_info_json_bytes.decode('utf-8'))
+                    # متد get از upstash-redis معمولاً نتیجه رو به صورت رشته برمی‌گردونه اگر بتونه decode کنه
+                    # یا بایت اگر نتونه. اینجا فرض می‌کنیم رشته JSON هست.
+                    if isinstance(user_info_json_data, bytes):
+                         user_info_str_decoded = user_info_json_data.decode('utf-8')
+                    else: # اگر از قبل رشته بود
+                         user_info_str_decoded = str(user_info_json_data) # برای اطمینان str()
+
+                    user_info = json.loads(user_info_str_decoded)
                     player_name = user_info.get('first_name', user_info.get('username', player_name))
                 except json.JSONDecodeError:
-                    print(f"Could not decode user_info for {user_id_str}")
+                    print(f"Could not decode user_info for {user_id_str}. Raw data: {user_info_json_data}")
+                except Exception as e_decode:
+                    print(f"Error processing user_info for {user_id_str}: {e_decode}. Raw data: {user_info_json_data}")
+
             leaderboard_data.append(
                 LeaderboardEntry(user_id=user_id_str, name=player_name, score=int(score_float))
             )
+            
         return LeaderboardResponse(leaderboard=leaderboard_data, game_type=game_type)
+
     except Exception as e:
         print(f"Error fetching leaderboard from Redis: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching leaderboard: {str(e)}")
