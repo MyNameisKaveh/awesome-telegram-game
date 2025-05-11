@@ -1,7 +1,7 @@
 /* تنظیمات اولیه و متغیرهای رنگ تلگرام */
 :root {
     --tg-theme-bg-color: var(--telegram-bg-color, #ffffff);
-    --tg-theme-text-color: var(--telegram-text-color, #000000);
+    --tg-theme-text-color: var(--telegram-text-color, #000000); /* رنگ متن پیش‌فرض تلگرام */
     --tg-theme-hint-color: var(--telegram-hint-color, #999999);
     --tg-theme-link-color: var(--telegram-link-color, #2481cc);
     --tg-theme-button-color: var(--telegram-button-color, #2481cc);
@@ -10,7 +10,7 @@
 
     /* رنگ‌های سفارشی بازی */
     --board-bg: #f0f0f0;
-    --cell-bg: #ffffff;
+    --cell-bg: #ffffff; /* پس‌زمینه پیش‌فرض برای سلول‌ها و بخش لیدربورد */
     --cell-border-color: #cccccc;
     --cell-hover-bg: #e9e9e9;
     --player-x-color: #007bff; /* آبی */
@@ -19,6 +19,7 @@
     --button-restart-bg: #28a745; /* سبز */
     --button-leaderboard-bg: #17a2b8; /* آبی فیروزه‌ای برای لیدربورد */
     --button-close-bg: #6c757d; /* خاکستری برای بستن */
+    --leaderboard-text-color-fallback: #333333; /* رنگ fallback برای متن لیدربورد اگر تم تلگرام روشن باشد */
 }
 
 body {
@@ -112,20 +113,20 @@ header h1 {
 
 #controls {
     display: flex;
-    justify-content: space-around; /* یا space-between */
+    justify-content: space-around;
     margin-bottom: 20px;
 }
 
 #controls button {
     color: var(--tg-theme-button-text-color);
     border: none;
-    padding: 10px 20px; /* کمی کوچکتر کردم */
-    font-size: 1em; /* کمی کوچکتر کردم */
+    padding: 10px 20px;
+    font-size: 1em;
     font-weight: 500;
     border-radius: 8px;
     cursor: pointer;
     transition: background-color 0.2s ease, opacity 0.2s ease;
-    min-width: 120px; /* برای هم اندازه بودن دکمه‌ها */
+    min-width: 120px; 
 }
 
 #controls button:hover {
@@ -140,15 +141,14 @@ header h1 {
     background-color: var(--button-leaderboard-bg);
 }
 
-
-/* استایل‌های جدید برای لیدربورد */
+/* استایل‌های برای لیدربورد */
 #leaderboard-section {
     margin-top: 25px;
     padding: 15px;
-    background-color: var(--cell-bg); 
+    background-color: var(--cell-bg); /* پس‌زمینه بخش لیدربورد */
     border: 1px solid var(--cell-border-color);
     border-radius: 8px;
-    text-align: right; /* برای محتوای فارسی */
+    text-align: right; 
 }
 
 #leaderboard-section.hidden {
@@ -159,12 +159,12 @@ header h1 {
     margin-top: 0;
     margin-bottom: 15px;
     font-size: 1.5em;
-    color: var(--tg-theme-text-color);
-    text-align: center; /* عنوان وسط‌چین */
+    color: var(--tg-theme-text-color, var(--leaderboard-text-color-fallback)); /* استفاده از fallback */
+    text-align: center; 
 }
 
 #leaderboard-list {
-    max-height: 200px; /* برای اسکرول شدن اگر لیست طولانی شد */
+    max-height: 200px; 
     overflow-y: auto;
 }
 
@@ -178,9 +178,11 @@ header h1 {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 5px; /* کمی پدینگ داخلی */
+    padding: 8px 5px; 
     border-bottom: 1px solid var(--board-bg); 
-    font-size: 1em; /* کمی کوچکتر کردم */
+    font-size: 1em; 
+    /* رنگ متن برای آیتم‌های لیست از body ارث‌بری می‌کند یا می‌توان اختصاصی تنظیم کرد */
+    color: var(--tg-theme-text-color, var(--leaderboard-text-color-fallback));
 }
 
 #leaderboard-list li:last-child {
@@ -190,29 +192,32 @@ header h1 {
 #leaderboard-list .player-rank {
     margin-left: 10px; 
     font-weight: bold;
-    min-width: 25px; /* برای هم‌ترازی رتبه‌ها */
+    min-width: 25px; 
+    color: var(--tg-theme-text-color, var(--leaderboard-text-color-fallback)); /* اطمینان از خوانایی رتبه */
 }
 
 #leaderboard-list .player-name {
     flex-grow: 1;
     text-align: right; 
-    overflow: hidden; /* جلوگیری از شکستن نام‌های طولانی */
+    overflow: hidden; 
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-left: 10px; /* فاصله از امتیاز */
+    margin-left: 10px; 
+    /* >>>>>>>> تغییر اصلی اینجا بود <<<<<<<< */
+    color: var(--tg-theme-text-color, var(--leaderboard-text-color-fallback)); /* استفاده از رنگ متن تلگرام با fallback */
 }
 
 #leaderboard-list .player-score {
     font-weight: bold;
-    color: var(--player-x-color); 
-    min-width: 30px; /* برای هم‌ترازی امتیازها */
+    color: var(--player-x-color); /* استفاده از رنگ متمایز برای امتیاز */
+    min-width: 30px; 
     text-align: left;
 }
 
 #close-leaderboard-button {
     margin-top: 15px;
     background-color: var(--button-close-bg);
-    color: var(--tg-theme-button-text-color);
+    color: var(--tg-theme-button-text-color); /* متن دکمه بستن معمولا با رنگ دکمه‌های تلگرام هماهنگه */
     border: none;
     padding: 10px 20px;
     font-size: 1em;
@@ -223,7 +228,6 @@ header h1 {
 #close-leaderboard-button:hover {
     opacity: 0.85;
 }
-
 
 footer {
     margin-top: 30px;
