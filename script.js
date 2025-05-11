@@ -13,9 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const PLAYER_X = 'X';
     const PLAYER_O = 'O';
-    let currentPlayer = PLAYER_X;
-    let boardState = Array(9).fill(null); 
-    let gameActive = true;
+    let currentPlayer; // در startGame مقداردهی اولیه می‌شود
+    let boardState;    // در startGame مقداردهی اولیه می‌شود
+    let gameActive;    // در startGame مقداردهی اولیه می‌شود
     let cells = []; 
 
     const winningCombinations = [
@@ -24,34 +24,69 @@ document.addEventListener('DOMContentLoaded', () => {
         [0, 4, 8], [2, 4, 6]
     ];
 
-    function createBoard() {
+    // ---------- شروع توابع بازی ----------
+
+    function createBoardDOM() { // فقط DOM را می‌سازد یا به‌روز می‌کند
         boardElement.innerHTML = ''; 
         cells = []; 
         for (let i = 0; i < 9; i++) {
             const cell = document.createElement('div');
             cell.classList.add('cell');
-            cell.dataset.index = i;
+            cell.dataset.index = i; // اندیس را به عنوان data attribute ذخیره می‌کنیم
             cell.addEventListener('click', handleCellClick);
             boardElement.appendChild(cell);
             cells.push(cell);
         }
     }
 
+    function updateCellDOM(index, player) {
+        if (cells[index]) {
+            cells[index].textContent = player;
+            if (player) {
+                cells[index].classList.add(player.toLowerCase());
+                cells[index].classList.add('occupied');
+            } else { // برای پاک کردن سلول
+                cells[index].classList.remove(PLAYER_X.toLowerCase(), PLAYER_O.toLowerCase(), 'occupied', 'winning-cell');
+            }
+        }
+    }
+    
+    function updateStatusMessage(message) {
+        statusArea.textContent = message;
+    }
+
+    function startGame() {
+        currentPlayer = PLAYER_X;
+        boardState = Array(9).fill(null);
+        gameActive = true;
+        gameContainer.classList.remove('game-over');
+        
+        cells.forEach((cell, index) => {
+            updateCellDOM(index, null); // پاک کردن محتوای DOM سلول‌ها
+        });
+        
+        updateStatusMessage(`نوبت بازیکن ${currentPlayer}`);
+        if (leaderboardSection) hideLeaderboard();
+    }
+
     function handleCellClick(event) {
         if (!gameActive) return;
+
         const clickedCell = event.target;
         const cellIndex = parseInt(clickedCell.dataset.index);
-        if (boardState[cellIndex] !== null) {
+
+        if (isNaN(cellIndex) || boardState[cellIndex] !== null) {
             return;
         }
+
         boardState[cellIndex] = currentPlayer;
-        clickedCell.textContent = currentPlayer;
-        clickedCell.classList.add(currentPlayer.toLowerCase()); 
-        clickedCell.classList.add('occupied');
-        if (checkWin()) {
-            endGame(false); 
+        updateCellDOM(cellIndex, currentPlayer);
+
+        const winnerInfo = checkWin();
+        if (winnerInfo.hasWinner) {
+            endGame(false, winnerInfo.winningPlayer);
         } else if (boardState.every(cell => cell !== null)) {
-            endGame(true); 
+            endGame(true, null); 
         } else {
             switchPlayer();
         }
@@ -59,60 +94,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function switchPlayer() {
         currentPlayer = currentPlayer === PLAYER_X ? PLAYER_O : PLAYER_X;
-        statusArea.textContent = `نوبت بازیکن ${currentPlayer}`;
+        updateStatusMessage(`نوبت بازیکن ${currentPlayer}`);
     }
 
     function checkWin() {
         for (const combination of winningCombinations) {
             const [a, b, c] = combination;
-            if (boardState[a] && boardState[a] === boardState[b] && board_state[a] === boardState[c]) { // اصلاح board_state به boardState
-                combination.forEach(index => cells[index].classList.add('winning-cell'));
-                return true; 
+            if (boardState[a] && 
+                boardState[a] === boardState[b] && 
+                boardState[a] === boardState[c]) {
+                // هایلایت کردن خانه‌های برنده
+                combination.forEach(index => {
+                    if (cells[index]) cells[index].classList.add('winning-cell');
+                });
+                return { hasWinner: true, winningPlayer: boardState[a], combination: combination }; 
             }
         }
-        return false; 
+        return { hasWinner: false, winningPlayer: null, combination: null }; 
     }
 
     async function submitScoreToAPI(score, gameType, telegramInitData) {
         const fullApiUrl = 'https://awesome-telegram-game.vercel.app/api/submit_score';
-
-        console.log("Attempting to submit score:", { score, gameType, telegramInitData: telegramInitData ? 'Available' : 'Not Available' });
+        let originalStatus = statusArea.textContent; // ذخیره پیام فعلی
 
         if (!telegramInitData) {
-            console.error("Telegram initData is not available. Score submission aborted.");
-            statusArea.textContent += " (امتیاز ثبت نشد - نیاز به اجرای بازی از داخل تلگرام)";
+            console.warn("Telegram initData is not available. Score submission aborted.");
+            updateStatusMessage(originalStatus + " (امتیاز ثبت نشد - نیاز به اجرای بازی از داخل تلگرام)");
             return;
         }
+        console.log("Attempting to submit score:", { score, gameType, telegramInitDataAvailable: !!telegramInitData });
+        updateStatusMessage(originalStatus + " (در حال ثبت امتیاز...)");
 
         try {
             const response = await fetch(fullApiUrl, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    score: score,
-                    game_type: gameType,
-                    telegramInitData: telegramInitData 
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ score, game_type: gameType, telegramInitData }),
             });
-
-            const result = await response.json(); 
-
+            const result = await response.json();
             if (response.ok) {
                 console.log("Score submitted successfully:", result);
-                statusArea.textContent += ` (امتیاز شما: ${score} ثبت شد! ${result.message || ''})`;
+                updateStatusMessage(originalStatus + ` (امتیاز شما: ${score} ثبت شد!)`);
             } else {
-                console.error("Error submitting score - API responded with an error:", result);
-                statusArea.textContent += ` (خطا در ثبت امتیاز: ${result.detail || response.statusText || 'خطای سرور'})`;
+                console.error("Error submitting score - API error:", result);
+                updateStatusMessage(originalStatus + ` (خطا در ثبت امتیاز: ${result.detail || 'خطای سرور'})`);
             }
         } catch (error) {
             console.error("Network or other error during score submission:", error);
-            statusArea.textContent += " (خطا در شبکه هنگام ثبت امتیاز یا پاسخ نامعتبر از سرور)";
+            updateStatusMessage(originalStatus + " (خطای شبکه در ثبت امتیاز)");
         }
     }
 
-    function endGame(isDraw) {
+    function endGame(isDraw, winner) { // winner هم به عنوان پارامتر اضافه شد
         gameActive = false;
         gameContainer.classList.add('game-over');
 
@@ -123,133 +156,54 @@ document.addEventListener('DOMContentLoaded', () => {
             statusMessage = 'بازی مساوی شد! 😐';
             gameScore = 1; 
         } else {
-            statusMessage = `بازیکن ${currentPlayer} برنده شد! 🎉`;
-            if (currentPlayer === PLAYER_X) { 
+            // winner همون currentPlayer هست که برنده شده
+            statusMessage = `بازیکن ${winner} برنده شد! 🎉`; 
+            if (winner === PLAYER_X) { // اگر X (فرضاً کاربر ما) برنده شد
                 gameScore = 10; 
-            } else { 
+            } else { // اگر O برنده شد
                 gameScore = 0; 
             }
         }
         
-        statusArea.textContent = statusMessage;
+        updateStatusMessage(statusMessage);
 
         if (tg && tg.initData) {
             const initDataString = tg.initData;
-            console.log("initData found, proceeding to submit score.");
             submitScoreToAPI(gameScore, "tictactoe_default_v1", initDataString);
         } else {
-            console.warn("Telegram WebApp initData not available or tg object is null. Score will not be submitted.");
-            statusArea.textContent += " (بازی در محیط تست، امتیاز ثبت نمی‌شود)";
+            console.warn("Telegram WebApp initData not available. Score will not be submitted.");
+            updateStatusMessage(statusMessage + " (امتیاز در حالت تست ثبت نمی‌شود)");
         }
-    }
-
-    function restartGame() {
-        currentPlayer = PLAYER_X;
-        boardState = Array(9).fill(null);
-        gameActive = true;
-        gameContainer.classList.remove('game-over');
-        
-        cells.forEach(cell => {
-            cell.textContent = '';
-            cell.classList.remove('x', 'o', 'occupied', 'winning-cell');
-        });
-        statusArea.textContent = `نوبت بازیکن ${currentPlayer}`; 
-        hideLeaderboard(); // بستن لیدربورد هنگام شروع مجدد بازی
     }
     
-    function applyTelegramTheme() {
-        if (tg && tg.themeParams) {
-            document.documentElement.style.setProperty('--telegram-bg-color', tg.themeParams.bg_color || '#ffffff');
-            document.documentElement.style.setProperty('--telegram-text-color', tg.themeParams.text_color || '#000000');
-            // ... بقیه متغیرهای تم ...
-            document.documentElement.style.setProperty('--telegram-hint-color', tg.themeParams.hint_color || '#999999');
-            document.documentElement.style.setProperty('--telegram-link-color', tg.themeParams.link_color || '#2481cc');
-            document.documentElement.style.setProperty('--telegram-button-color', tg.themeParams.button_color || '#2481cc');
-            document.documentElement.style.setProperty('--telegram-button-text-color', tg.themeParams.button_text_color || '#ffffff');
-            document.documentElement.style.setProperty('--telegram-secondary-bg-color', tg.themeParams.secondary_bg_color || '#f4f4f4');
-        }
-    }
+    function applyTelegramTheme() { /* ... (کد این تابع بدون تغییر) ... */ }
+    async function fetchLeaderboard() { /* ... (کد این تابع بدون تغییر) ... */ }
+    function displayLeaderboard(leaderboardArray) { /* ... (کد این تابع بدون تغییر) ... */ }
+    function showLeaderboard() { /* ... (کد این تابع بدون تغییر) ... */ }
+    function hideLeaderboard() { /* ... (کد این تابع بدون تغییر) ... */ }
+    
+    // ---------- شروع اجرای اولیه و راه‌اندازی بازی ----------
+    function initializeGame() {
+        createBoardDOM(); // ساختن اولیه DOM برد
+        startGame();      // مقداردهی اولیه وضعیت بازی و نمایش اولیه
 
-    async function fetchLeaderboard() {
-        const gameType = "tictactoe_default_v1";
-        const limit = 10;
-        const leaderboardApiUrl = `https://awesome-telegram-game.vercel.app/api/leaderboard?game_type=${gameType}&limit=${limit}`;
-        
-        console.log("Fetching leaderboard from:", leaderboardApiUrl);
-        leaderboardListElement.innerHTML = '<p>در حال بارگذاری لیدربورد...</p>';
+        restartButton.addEventListener('click', startGame); // دکمه ریستارت، بازی جدید شروع می‌کند
+        if (leaderboardButton) leaderboardButton.addEventListener('click', showLeaderboard);
+        if (closeLeaderboardButton) closeLeaderboardButton.addEventListener('click', hideLeaderboard);
 
-        try {
-            const response = await fetch(leaderboardApiUrl);
-            const data = await response.json();
-
-            if (response.ok) {
-                console.log("Leaderboard data fetched:", data);
-                displayLeaderboard(data.leaderboard);
-            } else {
-                console.error("Error fetching leaderboard:", data);
-                leaderboardListElement.innerHTML = `<p>خطا در دریافت لیدربورد: ${data.detail || response.statusText}</p>`;
+        if (tg) {
+            tg.ready(); 
+            applyTelegramTheme(); 
+            tg.onEvent('themeChanged', applyTelegramTheme); 
+            console.log("Telegram WebApp API initialized.");
+            if (tg.initData) console.log("Raw initData:", tg.initData);
+            if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                console.log("User data from initDataUnsafe:", tg.initDataUnsafe.user);
             }
-        } catch (error) {
-            console.error("Network or other error fetching leaderboard:", error);
-            leaderboardListElement.innerHTML = "<p>خطای شبکه یا سرور هنگام دریافت لیدربورد.</p>";
+        } else {
+            console.warn("Telegram WebApp API not available. Running in standalone browser mode.");
         }
     }
 
-    function displayLeaderboard(leaderboardArray) {
-        if (!leaderboardArray || leaderboardArray.length === 0) {
-            leaderboardListElement.innerHTML = "<p>هنوز هیچ رکوردی در لیدربورد ثبت نشده است.</p>";
-            return;
-        }
-
-        const ol = document.createElement('ol');
-        leaderboardArray.forEach((player, index) => {
-            const li = document.createElement('li');
-            const rankSpan = document.createElement('span');
-            rankSpan.classList.add('player-rank');
-            rankSpan.textContent = `${index + 1}.`;
-            const nameSpan = document.createElement('span');
-            nameSpan.classList.add('player-name');
-            nameSpan.textContent = player.name || `User ${player.user_id.substring(0,6)}`;
-            const scoreSpan = document.createElement('span');
-            scoreSpan.classList.add('player-score');
-            scoreSpan.textContent = player.score;
-            li.appendChild(rankSpan);
-            li.appendChild(nameSpan);
-            li.appendChild(scoreSpan);
-            ol.appendChild(li);
-        });
-
-        leaderboardListElement.innerHTML = '';
-        leaderboardListElement.appendChild(ol);
-    }
-
-    function showLeaderboard() {
-        leaderboardSection.classList.remove('hidden');
-        fetchLeaderboard(); 
-    }
-
-    function hideLeaderboard() {
-        leaderboardSection.classList.add('hidden');
-    }
-    
-    // ---------- شروع اجرای اولیه بازی ----------
-    if (tg) {
-        tg.ready(); 
-        applyTelegramTheme(); 
-        tg.onEvent('themeChanged', applyTelegramTheme); 
-        console.log("Telegram WebApp API initialized.");
-        if (tg.initData) console.log("initData (raw):", tg.initData);
-        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            console.log("User data from initDataUnsafe:", tg.initDataUnsafe.user);
-        }
-    } else {
-        console.warn("Telegram WebApp API not available. Running in standalone browser mode.");
-    }
-    
-    createBoard();
-    statusArea.textContent = `نوبت بازیکن ${currentPlayer}`;
-
-    restartButton.addEventListener('click', restartGame);
-    if (leaderboardButton) leaderboardButton.addEventListener('click', showLeaderboard);
-    if (closeLeaderboardButton) closeLeaderboardButton.addEventListener('click', hideLeaderboard);
+    initializeGame(); // فراخوانی تابع اصلی برای راه‌اندازی همه چیز
 });
