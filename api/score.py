@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
 from pydantic import BaseModel, Field
 import os
-from upstash_redis import Redis
+# >>>>>>>> تغییر: استفاده از کلاینت asyncio کتابخانه upstash-redis <<<<<<<<
+from upstash_redis.asyncio import Redis as UpstashAsyncRedis 
 import hashlib
 import hmac
 from urllib.parse import parse_qsl
@@ -15,23 +16,21 @@ class ScoreData(BaseModel):
     game_type: Optional[str] = "tictactoe_default"
     initData: str = Field(..., alias="telegramInitData")
 
-# خواندن متغیرهای محیطی برای Vercel KV (که از Upstash استفاده می‌کنه)
 KV_REST_API_URL = os.environ.get("KV_REST_API_URL")
 KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN")
-
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-# ساختن یک نمونه از کلاینت Redis
+redis_client: Optional[UpstashAsyncRedis] = None # تایپ رو هم مشخص می‌کنیم
+
 if KV_REST_API_URL and KV_REST_API_TOKEN:
-    redis_client = Redis(url=KV_REST_API_URL, token=KV_REST_API_TOKEN)
-    print(f"Upstash Redis client initialized. URL starts with: {KV_REST_API_URL[:20]}...") # لاگ برای اطمینان
+    # >>>>>>>> تغییر: ساختن نمونه از UpstashAsyncRedis <<<<<<<<
+    redis_client = UpstashAsyncRedis(url=KV_REST_API_URL, token=KV_REST_API_TOKEN)
+    print(f"Upstash Async Redis client initialized. URL starts with: {KV_REST_API_URL[:20]}...")
 else:
-    redis_client = None
     print("CRITICAL: Vercel KV environment variables (KV_REST_API_URL, KV_REST_API_TOKEN) not found! KV store will not work.")
 
-
+# تابع validate_init_data بدون تغییر باقی می‌ماند
 def validate_init_data(init_data_str: str, bot_token: str) -> Optional[dict]:
-    # ... (این تابع بدون تغییر باقی می‌ماند) ...
     if not bot_token:
         print("Error: BOT_TOKEN not available for initData validation.")
         return None
@@ -70,8 +69,6 @@ def validate_init_data(init_data_str: str, bot_token: str) -> Optional[dict]:
 
 @app.post("/api/submit_score")
 async def submit_score(score_input: ScoreData, request: Request):
-    # ... (این تابع هم با استفاده از redis_client که حالا باید درست ساخته شده باشه، کار می‌کنه) ...
-    # ... (تغییری در منطق داخلی این تابع لازم نیست، فقط مطمئن میشیم redis_client معتبره) ...
     print(f"Received score submission: Score={score_input.score}, GameType={score_input.game_type}")
     
     if not redis_client:
@@ -91,6 +88,7 @@ async def submit_score(score_input: ScoreData, request: Request):
     leaderboard_key = f"leaderboard:{score_input.game_type}"
     
     try:
+        # متدهای کلاینت ناهمگام upstash-redis هم با await فراخوانی میشن
         current_score_tuple = await redis_client.zscore(leaderboard_key, user_id)
         current_score = float(current_score_tuple) if current_score_tuple is not None else -1.0
 
@@ -114,16 +112,17 @@ async def submit_score(score_input: ScoreData, request: Request):
             "leaderboard_key": leaderboard_key
         }
     except Exception as e:
-        print(f"Error interacting with Redis (Upstash): {e}")
+        print(f"Error interacting with Async Redis (Upstash): {e}")
         raise HTTPException(status_code=500, detail=f"Error saving score: {e}")
 
 
 @app.get("/api/score_test")
 async def score_test():
-    if not redis_client: # این شرط باید False بشه اگر متغیرهای محیطی درست باشن
-        return {"message": "Score API active, but Redis client not initialized (check KV_REST_API_URL & KV_REST_API_TOKEN env vars)."}
+    if not redis_client:
+        return {"message": "Score API active, but Async Redis client not initialized (check KV_REST_API_URL & KV_REST_API_TOKEN env vars)."}
     try:
-        await redis_client.ping()
-        return {"message": "Score API endpoint is active and Redis connection is OK."}
+        # متد ping در کلاینت ناهمگام هم await نیاز داره
+        pong = await redis_client.ping()
+        return {"message": f"Score API endpoint is active and Async Redis connection is OK. PING response: {pong}"}
     except Exception as e:
-        return {"message": f"Score API endpoint is active, but Redis PING failed: {e} (Check KV_REST_API_URL & KV_REST_API_TOKEN)"}
+        return {"message": f"Score API endpoint is active, but Async Redis PING failed: {e} (Check KV_REST_API_URL & KV_REST_API_TOKEN)"}
