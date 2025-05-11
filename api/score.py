@@ -1,5 +1,4 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
-# >>>>>>>> اضافه کردن CORSMiddleware <<<<<<<<
 from fastapi.middleware.cors import CORSMiddleware 
 from pydantic import BaseModel, Field
 import os
@@ -8,37 +7,43 @@ import hashlib
 import hmac
 from urllib.parse import parse_qsl
 import json
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 app = FastAPI()
 
 # ---------- شروع پیکربندی CORS ----------
-# لیست دامنه‌هایی که اجازه دسترسی به API شما رو دارن
-# حتماً دامنه GitHub Pages خودتون رو اضافه کنید
-# اگر از دامنه پیش‌فرض گیت‌هاب پیجز استفاده می‌کنید، چیزی شبیه به این میشه:
-# "https://MyNameisKaveh.github.io"
-# اگر در آینده بازی رو روی دامنه Vercel هم هاست کردید، اون رو هم اضافه کنید.
 origins = [
-    "https://mynameiskaveh.github.io", # <<< دامنه GitHub Pages شما (با https و بدون اسلش در انتها)
-    # "http://localhost:3000", # اگر برای تست محلی نیاز دارید
-    # "http://127.0.0.1:3000", # اگر برای تست محلی نیاز دارید
+    "https://mynameiskaveh.github.io", # دامنه GitHub Pages شما
+    # برای تست محلی، می‌توانید این‌ها را اضافه کنید:
+    # "http://localhost:3000", 
+    # "http://127.0.0.1:8000", // اگر بازی را محلی با یک سرور ساده اجرا می‌کنید
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # لیست دامنه‌های مجاز
-    allow_credentials=True, # اجازه دادن به کوکی‌ها (اینجا لازم نیست ولی ضرری نداره)
-    allow_methods=["*"],    # اجازه دادن به همه متدها (GET, POST, OPTIONS, و غیره)
-    allow_headers=["*"],    # اجازه دادن به همه هدرها
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], 
+    allow_headers=["*"],
 )
 # ---------- پایان پیکربندی CORS ----------
 
-
 class ScoreData(BaseModel):
-    # ... (بدون تغییر) ...
     score: int
-    game_type: Optional[str] = "tictactoe_default"
+    game_type: Optional[str] = "tictactoe_default_v1" # مقدار پیش‌فرض رو اینجا هم یکسان می‌کنیم
     initData: str = Field(..., alias="telegramInitData")
+
+# مدل داده برای پاسخ لیدربورد
+class LeaderboardEntry(BaseModel):
+    user_id: str
+    username: str
+    first_name: str
+    score: int
+
+class LeaderboardResponse(BaseModel):
+    leaderboard: List[LeaderboardEntry]
+    message: Optional[str] = None
+
 
 KV_REST_API_URL = os.environ.get("KV_REST_API_URL")
 KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN")
@@ -53,7 +58,6 @@ else:
     print("CRITICAL: Vercel KV environment variables (KV_REST_API_URL, KV_REST_API_TOKEN) not found! KV store will not work.")
 
 def validate_init_data(init_data_str: str, bot_token: str) -> Optional[dict]:
-    # ... (بدون تغییر) ...
     if not bot_token:
         print("Error: BOT_TOKEN not available for initData validation.")
         return None
@@ -79,20 +83,19 @@ def validate_init_data(init_data_str: str, bot_token: str) -> Optional[dict]:
             try:
                 user_info_str = parsed_data['user']
                 user_info = json.loads(user_info_str)
-                return user_info
+                return user_info # برگرداندن دیکشنری کاربر
             except json.JSONDecodeError as e:
                 print(f"Error decoding 'user' field from initData: {e}. Value was: {parsed_data.get('user')}")
                 return None
         else:
             print("Warning: 'user' field not found in parsed_data after validation.")
-            return None
+            return None # یا یک دیکشنری خالی اگر این حالت را می‌پذیرید
     else:
         print(f"initData validation failed. Calculated: {calculated_hash}, Received: {received_hash}")
         return None
 
 @app.post("/api/submit_score")
 async def submit_score(score_input: ScoreData, request: Request):
-    # ... (بدون تغییر) ...
     print(f"Received score submission: Score={score_input.score}, GameType={score_input.game_type}")
     
     if not redis_client:
@@ -104,7 +107,7 @@ async def submit_score(score_input: ScoreData, request: Request):
         raise HTTPException(status_code=403, detail="Invalid user authentication (initData).")
 
     user_id = str(user_data['id'])
-    username = user_data.get('username', f"user_{user_id}")
+    username = user_data.get('username', f"user_{user_id[:6]}") # استفاده از بخشی از ID اگر نام نیست
     first_name = user_data.get('first_name', "Player")
 
     print(f"Score submitted by User ID: {user_id}, Username: {username}, First Name: {first_name}")
@@ -138,10 +141,72 @@ async def submit_score(score_input: ScoreData, request: Request):
         print(f"Error interacting with Async Redis (Upstash): {e}")
         raise HTTPException(status_code=500, detail=f"Error saving score: {e}")
 
+@app.get("/api/leaderboard", response_model=LeaderboardResponse) # اضافه کردن response_model
+async def get_leaderboard(
+    game_type: str = "tictactoe_default_v1", # نوع بازی را به عنوان پارامتر کوئری می‌گیریم
+    limit: int = 10 
+):
+    print(f"Received request for leaderboard: GameType={game_type}, Limit={limit}")
+
+    if not redis_client:
+        raise HTTPException(status_code=500, detail="Redis client not initialized. Check KV/Redis env vars.")
+
+    leaderboard_key = f"leaderboard:{game_type}"
+    
+    try:
+        # zrevrange: از بیشترین امتیاز به کمترین
+        # نتیجه: [user_id_bytes1, score1_bytes, user_id_bytes2, score2_bytes, ...]
+        raw_leaderboard = await redis_client.zrevrange(
+            leaderboard_key, 
+            0, 
+            limit - 1, 
+            withscores=True # مهم برای گرفتن امتیازها
+        )
+
+        if not raw_leaderboard:
+            return LeaderboardResponse(leaderboard=[], message="Leaderboard is empty for this game type.")
+
+        leaderboard_data: List[LeaderboardEntry] = []
+        
+        # raw_leaderboard لیستی از [member, score, member, score, ...] هست.
+        # باید اون رو به صورت جفتی پردازش کنیم.
+        i = 0
+        while i < len(raw_leaderboard):
+            user_id_bytes = raw_leaderboard[i]
+            score_bytes = raw_leaderboard[i+1]
+            i += 2
+
+            user_id = user_id_bytes.decode() if isinstance(user_id_bytes, bytes) else str(user_id_bytes)
+            score = float(score_bytes) if isinstance(score_bytes, bytes) else float(score_bytes)
+            
+            user_info_key = f"user_info:{user_id}"
+            user_info_json = await redis_client.get(user_info_key)
+            user_info_dict = {}
+            if user_info_json:
+                try:
+                    # user_info_json ممکن است بایت باشد یا رشته، بسته به کلاینت Redis
+                    user_info_data = user_info_json.decode() if isinstance(user_info_json, bytes) else user_info_json
+                    user_info_dict = json.loads(user_info_data)
+                except json.JSONDecodeError:
+                    print(f"Warning: Could not decode user_info for user_id {user_id}")
+            
+            leaderboard_data.append(LeaderboardEntry(
+                user_id=user_id,
+                username=user_info_dict.get("username", f"User...{user_id[-4:]}"),
+                first_name=user_info_dict.get("first_name", "Player"),
+                score=int(score) 
+            ))
+        
+        print(f"Leaderboard data prepared: Count={len(leaderboard_data)}")
+        return LeaderboardResponse(leaderboard=leaderboard_data)
+
+    except Exception as e:
+        print(f"Error fetching leaderboard from Redis: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching leaderboard: {e}")
+
 
 @app.get("/api/score_test")
 async def score_test():
-    # ... (بدون تغییر) ...
     if not redis_client:
         return {"message": "Score API active, but Async Redis client not initialized (check KV_REST_API_URL & KV_REST_API_TOKEN env vars)."}
     try:
