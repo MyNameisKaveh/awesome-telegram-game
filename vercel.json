@@ -1,27 +1,13 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "api/telegram.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "api/score.py",
-      "use": "@vercel/python"
-    }
+    { "src": "api/telegram.py", "use": "@vercel/python" },
+    { "src": "api/score.py",    "use": "@vercel/python" }
   ],
   "routes": [
-    {
-      "src": "/api/telegram",  // برای اطمینان، مسیر دقیق را برای فایل اصلی بات می‌گذاریم
-      "dest": "/api/telegram.py"
-    },
-    {
-      "src": "/api/score/(.*)", // تمام مسیرهایی که با /api/score/ شروع می‌شوند
-      "dest": "/api/score.py"   // به فایل score.py هدایت می‌شوند
-    },
-    {
-      "src": "/api/score",     // مسیر ریشه /api/score (اگر در score.py تعریف شده باشد)
-      "dest": "/api/score.py"
-    }
+    { "src": "/api/telegram", "dest": "/api/telegram.py" },
+    { "src": "/api/submit_score", "dest": "/api/score.py" },
+    { "src": "/api/leaderboard", "dest": "/api/score.py" },
+    { "src": "/api/score_test", "dest": "/api/score.py" }
   ]
 }
