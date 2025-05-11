@@ -17,6 +17,8 @@
     --player-o-color: #dc3545; /* قرمز */
     --winning-cell-bg: #c3e6cb; /* سبز روشن برای خانه‌های برنده */
     --button-restart-bg: #28a745; /* سبز */
+    --button-leaderboard-bg: #17a2b8; /* آبی فیروزه‌ای برای لیدربورد */
+    --button-close-bg: #6c757d; /* خاکستری برای بستن */
 }
 
 body {
@@ -32,8 +34,8 @@ body {
     justify-content: center;
     min-height: 100vh;
     text-align: center;
-    direction: rtl; /* برای زبان فارسی */
-    overscroll-behavior-y: contain; /* جلوگیری از کشیده شدن صفحه در iOS */
+    direction: rtl; 
+    overscroll-behavior-y: contain; 
 }
 
 #game-container {
@@ -54,20 +56,20 @@ header h1 {
 #status-area {
     font-size: 1.2em;
     margin-bottom: 20px;
-    min-height: 1.5em; /* جلوگیری از پرش صفحه */
+    min-height: 1.5em; 
     color: var(--tg-theme-hint-color);
     font-weight: 500;
 }
 
 #board {
     display: grid;
-    grid-template-columns: repeat(3, 1fr); /* ستون‌های با عرض مساوی */
-    grid-template-rows: repeat(3, 1fr);    /* ردیف‌های با ارتفاع مساوی */
-    gap: 8px; /* فاصله بین خانه‌ها */
+    grid-template-columns: repeat(3, 1fr); 
+    grid-template-rows: repeat(3, 1fr);    
+    gap: 8px; 
     width: 100%;
-    max-width: 300px; /* حداکثر عرض صفحه بازی */
-    aspect-ratio: 1 / 1; /* حفظ نسبت ۱:۱ برای مربع بودن */
-    margin: 0 auto 25px auto; /* وسط‌چین کردن و فاصله از پایین */
+    max-width: 300px; 
+    aspect-ratio: 1 / 1; 
+    margin: 0 auto 25px auto; 
     background-color: var(--board-bg);
     padding: 8px;
     border-radius: 8px;
@@ -81,11 +83,11 @@ header h1 {
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 3em; /* اندازه X و O بسته به اندازه خانه تنظیم می‌شود */
+    font-size: 3em; 
     font-weight: bold;
     cursor: pointer;
     transition: background-color 0.2s ease-in-out;
-    user-select: none; /* جلوگیری از انتخاب متن X و O */
+    user-select: none; 
 }
 
 .cell:hover:not(.occupied):not(.game-over) {
@@ -108,21 +110,120 @@ header h1 {
     background-color: var(--winning-cell-bg);
 }
 
+#controls {
+    display: flex;
+    justify-content: space-around; /* یا space-between */
+    margin-bottom: 20px;
+}
+
 #controls button {
-    background-color: var(--button-restart-bg);
     color: var(--tg-theme-button-text-color);
     border: none;
-    padding: 12px 25px;
-    font-size: 1.1em;
+    padding: 10px 20px; /* کمی کوچکتر کردم */
+    font-size: 1em; /* کمی کوچکتر کردم */
     font-weight: 500;
     border-radius: 8px;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+    min-width: 120px; /* برای هم اندازه بودن دکمه‌ها */
 }
 
 #controls button:hover {
-    opacity: 0.9;
+    opacity: 0.85;
 }
+
+#restart-button {
+    background-color: var(--button-restart-bg);
+}
+
+#leaderboard-button {
+    background-color: var(--button-leaderboard-bg);
+}
+
+
+/* استایل‌های جدید برای لیدربورد */
+#leaderboard-section {
+    margin-top: 25px;
+    padding: 15px;
+    background-color: var(--cell-bg); 
+    border: 1px solid var(--cell-border-color);
+    border-radius: 8px;
+    text-align: right; /* برای محتوای فارسی */
+}
+
+#leaderboard-section.hidden {
+    display: none; 
+}
+
+#leaderboard-section h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.5em;
+    color: var(--tg-theme-text-color);
+    text-align: center; /* عنوان وسط‌چین */
+}
+
+#leaderboard-list {
+    max-height: 200px; /* برای اسکرول شدن اگر لیست طولانی شد */
+    overflow-y: auto;
+}
+
+#leaderboard-list ol {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+#leaderboard-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 5px; /* کمی پدینگ داخلی */
+    border-bottom: 1px solid var(--board-bg); 
+    font-size: 1em; /* کمی کوچکتر کردم */
+}
+
+#leaderboard-list li:last-child {
+    border-bottom: none;
+}
+
+#leaderboard-list .player-rank {
+    margin-left: 10px; 
+    font-weight: bold;
+    min-width: 25px; /* برای هم‌ترازی رتبه‌ها */
+}
+
+#leaderboard-list .player-name {
+    flex-grow: 1;
+    text-align: right; 
+    overflow: hidden; /* جلوگیری از شکستن نام‌های طولانی */
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-left: 10px; /* فاصله از امتیاز */
+}
+
+#leaderboard-list .player-score {
+    font-weight: bold;
+    color: var(--player-x-color); 
+    min-width: 30px; /* برای هم‌ترازی امتیازها */
+    text-align: left;
+}
+
+#close-leaderboard-button {
+    margin-top: 15px;
+    background-color: var(--button-close-bg);
+    color: var(--tg-theme-button-text-color);
+    border: none;
+    padding: 10px 20px;
+    font-size: 1em;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+#close-leaderboard-button:hover {
+    opacity: 0.85;
+}
+
 
 footer {
     margin-top: 30px;
@@ -130,7 +231,6 @@ footer {
     color: var(--tg-theme-hint-color);
 }
 
-/* کلاس برای زمانی که بازی تمام شده */
 .game-over .cell:not(.occupied) {
     cursor: not-allowed;
 }
