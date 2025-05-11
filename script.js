@@ -3,11 +3,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusArea = document.getElementById('status-area');
     const restartButton = document.getElementById('restart-button');
     const gameContainer = document.getElementById('game-container');
+
+    const leaderboardButton = document.getElementById('leaderboard-button');
+    const leaderboardSection = document.getElementById('leaderboard-section');
+    const leaderboardListElement = document.getElementById('leaderboard-list');
+    const closeLeaderboardButton = document.getElementById('close-leaderboard-button');
     
-    // دسترسی به API تلگرام وب‌اپ (اگر در محیط تلگرام باشد)
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 
-    // تنظیمات اولیه بازی
     const PLAYER_X = 'X';
     const PLAYER_O = 'O';
     let currentPlayer = PLAYER_X;
@@ -16,12 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let cells = []; 
 
     const winningCombinations = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8], // ردیف‌ها
-        [0, 3, 6], [1, 4, 7], [2, 5, 8], // ستون‌ها
-        [0, 4, 8], [2, 4, 6]             // قطرها
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
     ];
-
-    // ---------- شروع توابع بازی ----------
 
     function createBoard() {
         boardElement.innerHTML = ''; 
@@ -38,19 +39,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleCellClick(event) {
         if (!gameActive) return;
-
         const clickedCell = event.target;
         const cellIndex = parseInt(clickedCell.dataset.index);
-
         if (boardState[cellIndex] !== null) {
             return;
         }
-
         boardState[cellIndex] = currentPlayer;
         clickedCell.textContent = currentPlayer;
         clickedCell.classList.add(currentPlayer.toLowerCase()); 
         clickedCell.classList.add('occupied');
-
         if (checkWin()) {
             endGame(false); 
         } else if (boardState.every(cell => cell !== null)) {
@@ -68,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkWin() {
         for (const combination of winningCombinations) {
             const [a, b, c] = combination;
-            if (boardState[a] && boardState[a] === boardState[b] && boardState[a] === boardState[c]) {
+            if (boardState[a] && boardState[a] === boardState[b] && board_state[a] === boardState[c]) { // اصلاح board_state به boardState
                 combination.forEach(index => cells[index].classList.add('winning-cell'));
                 return true; 
             }
@@ -77,14 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function submitScoreToAPI(score, gameType, telegramInitData) {
-        const fullApiUrl = 'https://awesome-telegram-game.vercel.app/api/submit_score'; // URL کامل API شما
+        const fullApiUrl = 'https://awesome-telegram-game.vercel.app/api/submit_score';
 
         console.log("Attempting to submit score:", { score, gameType, telegramInitData: telegramInitData ? 'Available' : 'Not Available' });
 
         if (!telegramInitData) {
             console.error("Telegram initData is not available. Score submission aborted.");
             statusArea.textContent += " (امتیاز ثبت نشد - نیاز به اجرای بازی از داخل تلگرام)";
-            return; // اگر initData نباشد، امتیازی ارسال نمی‌شود
+            return;
         }
 
         try {
@@ -100,16 +97,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }),
             });
 
-            const result = await response.json(); // همیشه سعی کن پاسخ را به عنوان JSON بخوانی
+            const result = await response.json(); 
 
-            if (response.ok) { // status code 200-299
+            if (response.ok) {
                 console.log("Score submitted successfully:", result);
-                statusArea.textContent += ` (امتیاز شما: ${score} ثبت شد! وضعیت: ${result.message || 'موفق'})`;
-            } else { // status code 4xx or 5xx
+                statusArea.textContent += ` (امتیاز شما: ${score} ثبت شد! ${result.message || ''})`;
+            } else {
                 console.error("Error submitting score - API responded with an error:", result);
                 statusArea.textContent += ` (خطا در ثبت امتیاز: ${result.detail || response.statusText || 'خطای سرور'})`;
             }
-        } catch (error) { // خطای شبکه یا خطای دیگر در fetch
+        } catch (error) {
             console.error("Network or other error during score submission:", error);
             statusArea.textContent += " (خطا در شبکه هنگام ثبت امتیاز یا پاسخ نامعتبر از سرور)";
         }
@@ -134,10 +131,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        statusArea.textContent = statusMessage; // اول پیام نتیجه بازی نمایش داده شود
+        statusArea.textContent = statusMessage;
 
-        // تلاش برای ارسال امتیاز به API
-        if (tg && tg.initData) { // چک می‌کنیم که tg و initData معتبر باشند
+        if (tg && tg.initData) {
             const initDataString = tg.initData;
             console.log("initData found, proceeding to submit score.");
             submitScoreToAPI(gameScore, "tictactoe_default_v1", initDataString);
@@ -157,14 +153,15 @@ document.addEventListener('DOMContentLoaded', () => {
             cell.textContent = '';
             cell.classList.remove('x', 'o', 'occupied', 'winning-cell');
         });
-        // پیام اولیه بعد از ریستارت باید توسط createBoard یا اینجا تنظیم شود
         statusArea.textContent = `نوبت بازیکن ${currentPlayer}`; 
+        hideLeaderboard(); // بستن لیدربورد هنگام شروع مجدد بازی
     }
     
     function applyTelegramTheme() {
         if (tg && tg.themeParams) {
             document.documentElement.style.setProperty('--telegram-bg-color', tg.themeParams.bg_color || '#ffffff');
             document.documentElement.style.setProperty('--telegram-text-color', tg.themeParams.text_color || '#000000');
+            // ... بقیه متغیرهای تم ...
             document.documentElement.style.setProperty('--telegram-hint-color', tg.themeParams.hint_color || '#999999');
             document.documentElement.style.setProperty('--telegram-link-color', tg.themeParams.link_color || '#2481cc');
             document.documentElement.style.setProperty('--telegram-button-color', tg.themeParams.button_color || '#2481cc');
@@ -173,15 +170,75 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ---------- شروع اجرای اولیه بازی ----------
+    async function fetchLeaderboard() {
+        const gameType = "tictactoe_default_v1";
+        const limit = 10;
+        const leaderboardApiUrl = `https://awesome-telegram-game.vercel.app/api/leaderboard?game_type=${gameType}&limit=${limit}`;
+        
+        console.log("Fetching leaderboard from:", leaderboardApiUrl);
+        leaderboardListElement.innerHTML = '<p>در حال بارگذاری لیدربورد...</p>';
+
+        try {
+            const response = await fetch(leaderboardApiUrl);
+            const data = await response.json();
+
+            if (response.ok) {
+                console.log("Leaderboard data fetched:", data);
+                displayLeaderboard(data.leaderboard);
+            } else {
+                console.error("Error fetching leaderboard:", data);
+                leaderboardListElement.innerHTML = `<p>خطا در دریافت لیدربورد: ${data.detail || response.statusText}</p>`;
+            }
+        } catch (error) {
+            console.error("Network or other error fetching leaderboard:", error);
+            leaderboardListElement.innerHTML = "<p>خطای شبکه یا سرور هنگام دریافت لیدربورد.</p>";
+        }
+    }
+
+    function displayLeaderboard(leaderboardArray) {
+        if (!leaderboardArray || leaderboardArray.length === 0) {
+            leaderboardListElement.innerHTML = "<p>هنوز هیچ رکوردی در لیدربورد ثبت نشده است.</p>";
+            return;
+        }
+
+        const ol = document.createElement('ol');
+        leaderboardArray.forEach((player, index) => {
+            const li = document.createElement('li');
+            const rankSpan = document.createElement('span');
+            rankSpan.classList.add('player-rank');
+            rankSpan.textContent = `${index + 1}.`;
+            const nameSpan = document.createElement('span');
+            nameSpan.classList.add('player-name');
+            nameSpan.textContent = player.name || `User ${player.user_id.substring(0,6)}`;
+            const scoreSpan = document.createElement('span');
+            scoreSpan.classList.add('player-score');
+            scoreSpan.textContent = player.score;
+            li.appendChild(rankSpan);
+            li.appendChild(nameSpan);
+            li.appendChild(scoreSpan);
+            ol.appendChild(li);
+        });
+
+        leaderboardListElement.innerHTML = '';
+        leaderboardListElement.appendChild(ol);
+    }
+
+    function showLeaderboard() {
+        leaderboardSection.classList.remove('hidden');
+        fetchLeaderboard(); 
+    }
+
+    function hideLeaderboard() {
+        leaderboardSection.classList.add('hidden');
+    }
     
-    if (tg) { // اگر در محیط تلگرام هستیم
-        tg.ready(); // به تلگرام اطلاع می‌دهد که وب‌اپ آماده است
-        applyTelegramTheme(); // اعمال تم اولیه
-        tg.onEvent('themeChanged', applyTelegramTheme); // گوش دادن به تغییرات تم
-        // tg.expand(); // اگر می‌خواهید وب‌اپ تمام صفحه شود
+    // ---------- شروع اجرای اولیه بازی ----------
+    if (tg) {
+        tg.ready(); 
+        applyTelegramTheme(); 
+        tg.onEvent('themeChanged', applyTelegramTheme); 
         console.log("Telegram WebApp API initialized.");
-        console.log("initData (raw):", tg.initData); // لاگ کردن initData برای دیباگ
+        if (tg.initData) console.log("initData (raw):", tg.initData);
         if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
             console.log("User data from initDataUnsafe:", tg.initDataUnsafe.user);
         }
@@ -189,11 +246,10 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn("Telegram WebApp API not available. Running in standalone browser mode.");
     }
     
-    // ساختن صفحه بازی اولیه و تنظیم پیام اولیه
     createBoard();
     statusArea.textContent = `نوبت بازیکن ${currentPlayer}`;
 
-    // اضافه کردن Event Listener به دکمه شروع مجدد
     restartButton.addEventListener('click', restartGame);
-
+    if (leaderboardButton) leaderboardButton.addEventListener('click', showLeaderboard);
+    if (closeLeaderboardButton) closeLeaderboardButton.addEventListener('click', hideLeaderboard);
 });
