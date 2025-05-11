@@ -5,7 +5,7 @@ import os
 from upstash_redis.asyncio import Redis as UpstashAsyncRedis 
 import hashlib
 import hmac
-from urllib.parse import parse_qsl, unquote # unquote اضافه شد
+from urllib.parse import parse_qsl, unquote
 import json
 from typing import Optional, List, Dict, Any
 
@@ -58,10 +58,7 @@ def validate_init_data(init_data_str: str, bot_token: str) -> Optional[Dict[str,
         print("Error: BOT_TOKEN not available for initData validation.")
         return None
     try:
-        # initData ممکن است خودش URL encoded باشد، یا فقط مقادیر داخل آن.
-        # parse_qsl مقادیر را unquote می‌کند. اگر کل initData انکود شده، اول باید unquote شود.
-        # init_data_str_unquoted = unquote(init_data_str) # اگر لازم شد
-        parsed_data = dict(parse_qsl(init_data_str)) # یا init_data_str_unquoted
+        parsed_data = dict(parse_qsl(init_data_str))
     except Exception as e:
         print(f"Error parsing initData string: {e}")
         return None
@@ -85,12 +82,8 @@ def validate_init_data(init_data_str: str, bot_token: str) -> Optional[Dict[str,
         if 'user' in parsed_data:
             try:
                 user_info_str = parsed_data['user']
-                # مقادیر داخل فیلد user هم ممکنه URL-encoded باشن
                 user_info_decoded_str = unquote(user_info_str) 
                 user_info = json.loads(user_info_decoded_str)
-                # اضافه کردن خود initData به اطلاعات کاربر برای دسترسی‌های بعدی اگر لازم شد
-                # user_info['raw_init_data_user_field'] = user_info_str 
-                # user_info['raw_init_data_parsed_excluding_hash'] = parsed_data 
                 return user_info
             except json.JSONDecodeError as e:
                 print(f"Error decoding 'user' field from initData: {e}. Value was: {parsed_data.get('user')}")
@@ -125,6 +118,7 @@ async def submit_score(score_input: ScoreData, request: Request):
     
     try:
         current_score_tuple = await redis_client.zscore(leaderboard_key, user_id)
+        # zscore برمی‌گرداند امتیاز را به صورت رشته یا None
         current_score = float(current_score_tuple) if current_score_tuple is not None else -1.0
 
         if score_input.score > current_score:
@@ -169,9 +163,8 @@ async def get_leaderboard(
     leaderboard_key = f"leaderboard:{game_type}"
     
     try:
-        # zrevrange با withscores=True معمولاً لیستی از تاپل‌ها (عضو، امتیاز) برمی‌گرداند
-        # مثال: [(b'user1', 100.0), (b'user2', 90.0)]
-        raw_leaderboard_tuples: List[tuple[bytes, bytes]] = await redis_client.zrevrange( # تایپ دقیق‌تر
+        # zrevrange با withscores=True در upstash-redis لیستی از تاپل‌ها (عضو: str، امتیاز: float) برمی‌گرداند
+        raw_leaderboard_tuples: List[tuple[str, float]] = await redis_client.zrevrange(
             leaderboard_key, 
             0, 
             limit - 1, 
@@ -186,21 +179,21 @@ async def get_leaderboard(
 
         leaderboard_data: List[LeaderboardEntry] = []
         
-        # حالا روی تاپل‌ها حلقه می‌زنیم
-        for user_id_bytes, score_bytes in raw_leaderboard_tuples:
-            user_id = user_id_bytes.decode('utf-8') # مطمئن می‌شویم که بایت به رشته تبدیل می‌شود
-            score_str = score_bytes.decode('utf-8') # امتیاز هم به رشته تبدیل می‌شود
-            score = float(score_str) # سپس به float
+        for user_id_str, score_float in raw_leaderboard_tuples:
+            # user_id_str و score_float از قبل رشته و float هستند
+            user_id = user_id_str
+            score = score_float
             
             user_info_key = f"user_info:{user_id}"
-            user_info_json_bytes = await redis_client.get(user_info_key)
+            user_info_raw = await redis_client.get(user_info_key) # get معمولاً رشته برمی‌گرداند
             user_info_dict = {}
-            if user_info_json_bytes:
+            if user_info_raw:
                 try:
-                    user_info_data_str = user_info_json_bytes.decode('utf-8')
+                    # اگر user_info_raw بایت بود، decode می‌کنیم، در غیر این صورت مستقیم استفاده می‌کنیم
+                    user_info_data_str = user_info_raw.decode('utf-8') if isinstance(user_info_raw, bytes) else str(user_info_raw)
                     user_info_dict = json.loads(user_info_data_str)
                 except json.JSONDecodeError:
-                    print(f"Warning: Could not decode user_info for user_id {user_id}. Raw data: {user_info_json_bytes}")
+                    print(f"Warning: Could not decode user_info for user_id {user_id}. Raw data: {user_info_raw}")
             
             leaderboard_data.append(LeaderboardEntry(
                 user_id=user_id,
