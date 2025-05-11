@@ -1,1 +1,3 @@
-python-telegram-bot
+python-telegram-bot>=20.0  # مشخص کردن نسخه برای اطمینان از پشتیبانی async
+fastapi
+uvicorn[standard]          # uvicorn با وابستگی‌های استاندارد
