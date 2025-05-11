@@ -7,16 +7,13 @@ import hashlib
 import hmac
 from urllib.parse import parse_qsl
 import json
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any # Any اضافه شد
 
 app = FastAPI()
 
 # ---------- شروع پیکربندی CORS ----------
 origins = [
-    "https://mynameiskaveh.github.io", # دامنه GitHub Pages شما
-    # برای تست محلی، می‌توانید این‌ها را اضافه کنید:
-    # "http://localhost:3000", 
-    # "http://127.0.0.1:8000", // اگر بازی را محلی با یک سرور ساده اجرا می‌کنید
+    "https://mynameiskaveh.github.io", 
 ]
 
 app.add_middleware(
@@ -30,10 +27,9 @@ app.add_middleware(
 
 class ScoreData(BaseModel):
     score: int
-    game_type: Optional[str] = "tictactoe_default_v1" # مقدار پیش‌فرض رو اینجا هم یکسان می‌کنیم
+    game_type: Optional[str] = "tictactoe_default_v1"
     initData: str = Field(..., alias="telegramInitData")
 
-# مدل داده برای پاسخ لیدربورد
 class LeaderboardEntry(BaseModel):
     user_id: str
     username: str
@@ -57,23 +53,31 @@ if KV_REST_API_URL and KV_REST_API_TOKEN:
 else:
     print("CRITICAL: Vercel KV environment variables (KV_REST_API_URL, KV_REST_API_TOKEN) not found! KV store will not work.")
 
-def validate_init_data(init_data_str: str, bot_token: str) -> Optional[dict]:
+def validate_init_data(init_data_str: str, bot_token: str) -> Optional[Dict[str, Any]]: # تایپ بازگشتی دقیق‌تر شد
     if not bot_token:
         print("Error: BOT_TOKEN not available for initData validation.")
         return None
     try:
-        parsed_data = dict(parse_qsl(init_data_str))
+        # از unquote استفاده می‌کنیم چون initData ممکنه URL-encoded باشه
+        # این کار باید قبل از parse_qsl انجام بشه اگر کل رشته initData انکود شده
+        # اما معمولاً خود مقادیر داخل query string انکود میشن که parse_qsl هندل می‌کنه
+        # init_data_str_decoded = unquote(init_data_str) # اگر لازم شد
+        parsed_data = dict(parse_qsl(init_data_str)) # یا init_data_str_decoded
     except Exception as e:
         print(f"Error parsing initData string: {e}")
         return None
+        
     if "hash" not in parsed_data:
         print("Error: 'hash' not found in initData.")
         return None
+    
     received_hash = parsed_data.pop("hash")
+
     data_check_string_parts = []
     for key, value in sorted(parsed_data.items()):
         data_check_string_parts.append(f"{key}={value}")
     data_check_string = "\n".join(data_check_string_parts)
+
     secret_key = hmac.new("WebAppData".encode(), bot_token.encode(), hashlib.sha256).digest()
     calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
@@ -82,16 +86,22 @@ def validate_init_data(init_data_str: str, bot_token: str) -> Optional[dict]:
         if 'user' in parsed_data:
             try:
                 user_info_str = parsed_data['user']
-                user_info = json.loads(user_info_str)
-                return user_info # برگرداندن دیکشنری کاربر
+                # مقادیر داخل فیلد user هم ممکنه URL-encoded باشن
+                user_info_decoded_str = unquote(user_info_str) 
+                user_info = json.loads(user_info_decoded_str)
+                # اضافه کردن خود initData به اطلاعات کاربر برای دسترسی‌های بعدی اگر لازم شد
+                user_info['raw_init_data_user_field'] = user_info_str 
+                user_info['raw_init_data_parsed_excluding_hash'] = parsed_data 
+                return user_info
             except json.JSONDecodeError as e:
                 print(f"Error decoding 'user' field from initData: {e}. Value was: {parsed_data.get('user')}")
                 return None
         else:
             print("Warning: 'user' field not found in parsed_data after validation.")
-            return None # یا یک دیکشنری خالی اگر این حالت را می‌پذیرید
+            return None
     else:
-        print(f"initData validation failed. Calculated: {calculated_hash}, Received: {received_hash}")
+        print(f"initData validation FAILED. Calculated: {calculated_hash}, Received: {received_hash}")
+        print(f"Data check string used for hash: \n{data_check_string}")
         return None
 
 @app.post("/api/submit_score")
@@ -107,7 +117,7 @@ async def submit_score(score_input: ScoreData, request: Request):
         raise HTTPException(status_code=403, detail="Invalid user authentication (initData).")
 
     user_id = str(user_data['id'])
-    username = user_data.get('username', f"user_{user_id[:6]}") # استفاده از بخشی از ID اگر نام نیست
+    username = user_data.get('username', f"user_{user_id[:6]}")
     first_name = user_data.get('first_name', "Player")
 
     print(f"Score submitted by User ID: {user_id}, Username: {username}, First Name: {first_name}")
@@ -127,7 +137,14 @@ async def submit_score(score_input: ScoreData, request: Request):
             action_taken = "not_updated_lower_score"
         
         user_info_key = f"user_info:{user_id}"
-        await redis_client.set(user_info_key, json.dumps({"username": username, "first_name": first_name}))
+        # ذخیره اطلاعات کاربر با unquote کردن مقادیر اگر لازم است
+        user_info_to_store = {
+            "username": username,
+            "first_name": first_name,
+            # می‌توانید فیلدهای بیشتری از user_data که از validate_init_data میاد رو اینجا ذخیره کنید
+            "language_code": user_data.get("language_code") 
+        }
+        await redis_client.set(user_info_key, json.dumps(user_info_to_store))
         
         return {
             "status": "success", 
@@ -138,61 +155,70 @@ async def submit_score(score_input: ScoreData, request: Request):
             "leaderboard_key": leaderboard_key
         }
     except Exception as e:
-        print(f"Error interacting with Async Redis (Upstash): {e}")
+        print(f"Error interacting with Async Redis (Upstash) in submit_score: {e}")
         raise HTTPException(status_code=500, detail=f"Error saving score: {e}")
 
-@app.get("/api/leaderboard", response_model=LeaderboardResponse) # اضافه کردن response_model
+@app.get("/api/leaderboard", response_model=LeaderboardResponse)
 async def get_leaderboard(
-    game_type: str = "tictactoe_default_v1", # نوع بازی را به عنوان پارامتر کوئری می‌گیریم
+    game_type: str = "tictactoe_default_v1", 
     limit: int = 10 
 ):
-    print(f"Received request for leaderboard: GameType={game_type}, Limit={limit}")
+    print(f"Received GET request for leaderboard: GameType={game_type}, Limit={limit}")
 
     if not redis_client:
+        print("Error in get_leaderboard: Redis client not initialized.")
         raise HTTPException(status_code=500, detail="Redis client not initialized. Check KV/Redis env vars.")
 
     leaderboard_key = f"leaderboard:{game_type}"
     
     try:
-        # zrevrange: از بیشترین امتیاز به کمترین
-        # نتیجه: [user_id_bytes1, score1_bytes, user_id_bytes2, score2_bytes, ...]
         raw_leaderboard = await redis_client.zrevrange(
             leaderboard_key, 
             0, 
             limit - 1, 
-            withscores=True # مهم برای گرفتن امتیازها
+            withscores=True
         )
 
-        if not raw_leaderboard:
+        print(f"Raw leaderboard data from Redis for key '{leaderboard_key}' (length {len(raw_leaderboard)}): {raw_leaderboard}")
+
+        if not raw_leaderboard: # اگر لیست خالی باشد
+            print(f"Leaderboard for key '{leaderboard_key}' is empty.")
             return LeaderboardResponse(leaderboard=[], message="Leaderboard is empty for this game type.")
+
+        # بررسی زوج بودن تعداد اعضا قبل از حلقه
+        if len(raw_leaderboard) % 2 != 0:
+            print(f"Error: Raw leaderboard data has an odd number of elements: {len(raw_leaderboard)}. Data: {raw_leaderboard}")
+            raise HTTPException(status_code=500, detail="Internal error: inconsistent leaderboard data format from Redis.")
 
         leaderboard_data: List[LeaderboardEntry] = []
         
-        # raw_leaderboard لیستی از [member, score, member, score, ...] هست.
-        # باید اون رو به صورت جفتی پردازش کنیم.
         i = 0
         while i < len(raw_leaderboard):
+            # ایندکس‌ها رو با دقت چک می‌کنیم
+            if i + 1 >= len(raw_leaderboard): # اگر به خاطر دلیلی به انتهای لیست رسیدیم و جفت کامل نیست
+                print(f"Warning: Incomplete pair at the end of raw_leaderboard. Index i={i}, len={len(raw_leaderboard)}")
+                break 
+
             user_id_bytes = raw_leaderboard[i]
-            score_bytes = raw_leaderboard[i+1]
+            score_bytes = raw_leaderboard[i+1] 
             i += 2
 
-            user_id = user_id_bytes.decode() if isinstance(user_id_bytes, bytes) else str(user_id_bytes)
-            score = float(score_bytes) if isinstance(score_bytes, bytes) else float(score_bytes)
+            user_id = user_id_bytes.decode('utf-8') if isinstance(user_id_bytes, bytes) else str(user_id_bytes)
+            score = float(score_bytes.decode('utf-8')) if isinstance(score_bytes, bytes) else float(score_bytes)
             
             user_info_key = f"user_info:{user_id}"
-            user_info_json = await redis_client.get(user_info_key)
+            user_info_json_bytes = await redis_client.get(user_info_key) # get ممکن است بایت برگرداند
             user_info_dict = {}
-            if user_info_json:
+            if user_info_json_bytes:
                 try:
-                    # user_info_json ممکن است بایت باشد یا رشته، بسته به کلاینت Redis
-                    user_info_data = user_info_json.decode() if isinstance(user_info_json, bytes) else user_info_json
-                    user_info_dict = json.loads(user_info_data)
+                    user_info_data_str = user_info_json_bytes.decode('utf-8') if isinstance(user_info_json_bytes, bytes) else user_info_json_bytes
+                    user_info_dict = json.loads(user_info_data_str)
                 except json.JSONDecodeError:
-                    print(f"Warning: Could not decode user_info for user_id {user_id}")
+                    print(f"Warning: Could not decode user_info for user_id {user_id}. Raw data: {user_info_json_bytes}")
             
             leaderboard_data.append(LeaderboardEntry(
                 user_id=user_id,
-                username=user_info_dict.get("username", f"User...{user_id[-4:]}"),
+                username=user_info_dict.get("username", f"User...{user_id[-4:] if len(user_id) > 3 else user_id}"),
                 first_name=user_info_dict.get("first_name", "Player"),
                 score=int(score) 
             ))
@@ -201,12 +227,15 @@ async def get_leaderboard(
         return LeaderboardResponse(leaderboard=leaderboard_data)
 
     except Exception as e:
-        print(f"Error fetching leaderboard from Redis: {e}")
-        raise HTTPException(status_code=500, detail=f"Error fetching leaderboard: {e}")
+        print(f"Error fetching or processing leaderboard from Redis: {e}")
+        import traceback
+        traceback.print_exc() # چاپ کامل traceback برای خطایابی بهتر
+        raise HTTPException(status_code=500, detail=f"An error occurred while fetching the leaderboard: {str(e)}")
 
 
 @app.get("/api/score_test")
 async def score_test():
+    # ... (بدون تغییر) ...
     if not redis_client:
         return {"message": "Score API active, but Async Redis client not initialized (check KV_REST_API_URL & KV_REST_API_TOKEN env vars)."}
     try:
