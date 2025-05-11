@@ -19,7 +19,7 @@
     --button-restart-bg: #28a745; /* سبز */
     --button-leaderboard-bg: #17a2b8; /* آبی فیروزه‌ای برای لیدربورد */
     --button-close-bg: #6c757d; /* خاکستری برای بستن */
-    --leaderboard-text-color-fallback: #333333; /* رنگ fallback برای متن لیدربورد اگر تم تلگرام روشن باشد */
+    --leaderboard-text-color-fallback: #333333; /* رنگ fallback تیره برای متن لیدربورد */
 }
 
 body {
@@ -145,7 +145,7 @@ header h1 {
 #leaderboard-section {
     margin-top: 25px;
     padding: 15px;
-    background-color: var(--cell-bg); /* پس‌زمینه بخش لیدربورد */
+    background-color: var(--cell-bg); 
     border: 1px solid var(--cell-border-color);
     border-radius: 8px;
     text-align: right; 
@@ -159,7 +159,7 @@ header h1 {
     margin-top: 0;
     margin-bottom: 15px;
     font-size: 1.5em;
-    color: var(--tg-theme-text-color, var(--leaderboard-text-color-fallback)); /* استفاده از fallback */
+    color: var(--leaderboard-text-color-fallback); /* استفاده از رنگ fallback */
     text-align: center; 
 }
 
@@ -181,8 +181,7 @@ header h1 {
     padding: 8px 5px; 
     border-bottom: 1px solid var(--board-bg); 
     font-size: 1em; 
-    /* رنگ متن برای آیتم‌های لیست از body ارث‌بری می‌کند یا می‌توان اختصاصی تنظیم کرد */
-    color: var(--tg-theme-text-color, var(--leaderboard-text-color-fallback));
+    color: var(--leaderboard-text-color-fallback); /* استفاده از رنگ fallback */
 }
 
 #leaderboard-list li:last-child {
@@ -193,7 +192,7 @@ header h1 {
     margin-left: 10px; 
     font-weight: bold;
     min-width: 25px; 
-    color: var(--tg-theme-text-color, var(--leaderboard-text-color-fallback)); /* اطمینان از خوانایی رتبه */
+    color: var(--leaderboard-text-color-fallback); /* استفاده از رنگ fallback */
 }
 
 #leaderboard-list .player-name {
@@ -203,13 +202,12 @@ header h1 {
     text-overflow: ellipsis;
     white-space: nowrap;
     margin-left: 10px; 
-    /* >>>>>>>> تغییر اصلی اینجا بود <<<<<<<< */
-    color: var(--tg-theme-text-color, var(--leaderboard-text-color-fallback)); /* استفاده از رنگ متن تلگرام با fallback */
+    color: var(--leaderboard-text-color-fallback); /* استفاده از رنگ fallback */
 }
 
 #leaderboard-list .player-score {
     font-weight: bold;
-    color: var(--player-x-color); /* استفاده از رنگ متمایز برای امتیاز */
+    color: var(--player-x-color); /* امتیاز با رنگ متمایز */
     min-width: 30px; 
     text-align: left;
 }
@@ -217,7 +215,7 @@ header h1 {
 #close-leaderboard-button {
     margin-top: 15px;
     background-color: var(--button-close-bg);
-    color: var(--tg-theme-button-text-color); /* متن دکمه بستن معمولا با رنگ دکمه‌های تلگرام هماهنگه */
+    color: var(--tg-theme-button-text-color);
     border: none;
     padding: 10px 20px;
     font-size: 1em;
