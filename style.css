@@ -1,0 +1,136 @@
+/* تنظیمات اولیه و متغیرهای رنگ تلگرام */
+:root {
+    --tg-theme-bg-color: var(--telegram-bg-color, #ffffff);
+    --tg-theme-text-color: var(--telegram-text-color, #000000);
+    --tg-theme-hint-color: var(--telegram-hint-color, #999999);
+    --tg-theme-link-color: var(--telegram-link-color, #2481cc);
+    --tg-theme-button-color: var(--telegram-button-color, #2481cc);
+    --tg-theme-button-text-color: var(--telegram-button-text-color, #ffffff);
+    --tg-theme-secondary-bg-color: var(--telegram-secondary-bg-color, #f4f4f4);
+
+    /* رنگ‌های سفارشی بازی */
+    --board-bg: #f0f0f0;
+    --cell-bg: #ffffff;
+    --cell-border-color: #cccccc;
+    --cell-hover-bg: #e9e9e9;
+    --player-x-color: #007bff; /* آبی */
+    --player-o-color: #dc3545; /* قرمز */
+    --winning-cell-bg: #c3e6cb; /* سبز روشن برای خانه‌های برنده */
+    --button-restart-bg: #28a745; /* سبز */
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 15px;
+    box-sizing: border-box;
+    background-color: var(--tg-theme-bg-color);
+    color: var(--tg-theme-text-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    text-align: center;
+    direction: rtl; /* برای زبان فارسی */
+    overscroll-behavior-y: contain; /* جلوگیری از کشیده شدن صفحه در iOS */
+}
+
+#game-container {
+    background-color: var(--tg-theme-secondary-bg-color);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    max-width: 400px;
+    width: 100%;
+}
+
+header h1 {
+    font-size: 2em;
+    margin-bottom: 20px;
+    color: var(--tg-theme-text-color);
+}
+
+#status-area {
+    font-size: 1.2em;
+    margin-bottom: 20px;
+    min-height: 1.5em; /* جلوگیری از پرش صفحه */
+    color: var(--tg-theme-hint-color);
+    font-weight: 500;
+}
+
+#board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* ستون‌های با عرض مساوی */
+    grid-template-rows: repeat(3, 1fr);    /* ردیف‌های با ارتفاع مساوی */
+    gap: 8px; /* فاصله بین خانه‌ها */
+    width: 100%;
+    max-width: 300px; /* حداکثر عرض صفحه بازی */
+    aspect-ratio: 1 / 1; /* حفظ نسبت ۱:۱ برای مربع بودن */
+    margin: 0 auto 25px auto; /* وسط‌چین کردن و فاصله از پایین */
+    background-color: var(--board-bg);
+    padding: 8px;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+.cell {
+    background-color: var(--cell-bg);
+    border: 1px solid var(--cell-border-color);
+    border-radius: 6px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 3em; /* اندازه X و O بسته به اندازه خانه تنظیم می‌شود */
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+    user-select: none; /* جلوگیری از انتخاب متن X و O */
+}
+
+.cell:hover:not(.occupied):not(.game-over) {
+    background-color: var(--cell-hover-bg);
+}
+
+.cell.x {
+    color: var(--player-x-color);
+}
+
+.cell.o {
+    color: var(--player-o-color);
+}
+
+.cell.occupied {
+    cursor: not-allowed;
+}
+
+.cell.winning-cell {
+    background-color: var(--winning-cell-bg);
+}
+
+#controls button {
+    background-color: var(--button-restart-bg);
+    color: var(--tg-theme-button-text-color);
+    border: none;
+    padding: 12px 25px;
+    font-size: 1.1em;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#controls button:hover {
+    opacity: 0.9;
+}
+
+footer {
+    margin-top: 30px;
+    font-size: 0.9em;
+    color: var(--tg-theme-hint-color);
+}
+
+/* کلاس برای زمانی که بازی تمام شده */
+.game-over .cell:not(.occupied) {
+    cursor: not-allowed;
+}
