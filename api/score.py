@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
+# >>>>>>>> اضافه کردن CORSMiddleware <<<<<<<<
+from fastapi.middleware.cors import CORSMiddleware 
 from pydantic import BaseModel, Field
 import os
-# >>>>>>>> تغییر: استفاده از کلاینت asyncio کتابخانه upstash-redis <<<<<<<<
 from upstash_redis.asyncio import Redis as UpstashAsyncRedis 
 import hashlib
 import hmac
@@ -11,7 +12,30 @@ from typing import Optional
 
 app = FastAPI()
 
+# ---------- شروع پیکربندی CORS ----------
+# لیست دامنه‌هایی که اجازه دسترسی به API شما رو دارن
+# حتماً دامنه GitHub Pages خودتون رو اضافه کنید
+# اگر از دامنه پیش‌فرض گیت‌هاب پیجز استفاده می‌کنید، چیزی شبیه به این میشه:
+# "https://MyNameisKaveh.github.io"
+# اگر در آینده بازی رو روی دامنه Vercel هم هاست کردید، اون رو هم اضافه کنید.
+origins = [
+    "https://mynameiskaveh.github.io", # <<< دامنه GitHub Pages شما (با https و بدون اسلش در انتها)
+    # "http://localhost:3000", # اگر برای تست محلی نیاز دارید
+    # "http://127.0.0.1:3000", # اگر برای تست محلی نیاز دارید
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # لیست دامنه‌های مجاز
+    allow_credentials=True, # اجازه دادن به کوکی‌ها (اینجا لازم نیست ولی ضرری نداره)
+    allow_methods=["*"],    # اجازه دادن به همه متدها (GET, POST, OPTIONS, و غیره)
+    allow_headers=["*"],    # اجازه دادن به همه هدرها
+)
+# ---------- پایان پیکربندی CORS ----------
+
+
 class ScoreData(BaseModel):
+    # ... (بدون تغییر) ...
     score: int
     game_type: Optional[str] = "tictactoe_default"
     initData: str = Field(..., alias="telegramInitData")
@@ -20,17 +44,16 @@ KV_REST_API_URL = os.environ.get("KV_REST_API_URL")
 KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-redis_client: Optional[UpstashAsyncRedis] = None # تایپ رو هم مشخص می‌کنیم
+redis_client: Optional[UpstashAsyncRedis] = None
 
 if KV_REST_API_URL and KV_REST_API_TOKEN:
-    # >>>>>>>> تغییر: ساختن نمونه از UpstashAsyncRedis <<<<<<<<
     redis_client = UpstashAsyncRedis(url=KV_REST_API_URL, token=KV_REST_API_TOKEN)
     print(f"Upstash Async Redis client initialized. URL starts with: {KV_REST_API_URL[:20]}...")
 else:
     print("CRITICAL: Vercel KV environment variables (KV_REST_API_URL, KV_REST_API_TOKEN) not found! KV store will not work.")
 
-# تابع validate_init_data بدون تغییر باقی می‌ماند
 def validate_init_data(init_data_str: str, bot_token: str) -> Optional[dict]:
+    # ... (بدون تغییر) ...
     if not bot_token:
         print("Error: BOT_TOKEN not available for initData validation.")
         return None
@@ -69,6 +92,7 @@ def validate_init_data(init_data_str: str, bot_token: str) -> Optional[dict]:
 
 @app.post("/api/submit_score")
 async def submit_score(score_input: ScoreData, request: Request):
+    # ... (بدون تغییر) ...
     print(f"Received score submission: Score={score_input.score}, GameType={score_input.game_type}")
     
     if not redis_client:
@@ -88,7 +112,6 @@ async def submit_score(score_input: ScoreData, request: Request):
     leaderboard_key = f"leaderboard:{score_input.game_type}"
     
     try:
-        # متدهای کلاینت ناهمگام upstash-redis هم با await فراخوانی میشن
         current_score_tuple = await redis_client.zscore(leaderboard_key, user_id)
         current_score = float(current_score_tuple) if current_score_tuple is not None else -1.0
 
@@ -118,10 +141,10 @@ async def submit_score(score_input: ScoreData, request: Request):
 
 @app.get("/api/score_test")
 async def score_test():
+    # ... (بدون تغییر) ...
     if not redis_client:
         return {"message": "Score API active, but Async Redis client not initialized (check KV_REST_API_URL & KV_REST_API_TOKEN env vars)."}
     try:
-        # متد ping در کلاینت ناهمگام هم await نیاز داره
         pong = await redis_client.ping()
         return {"message": f"Score API endpoint is active and Async Redis connection is OK. PING response: {pong}"}
     except Exception as e:
